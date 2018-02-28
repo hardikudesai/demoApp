@@ -7,6 +7,27 @@ public class PreviousHLPrize {
 	private double yesterdayHigh;
 	
 	private double yesterdayLow;
+	
+	private double upperBand;
+	
+	private double lowerBand;
+	
+
+	public double getUpperBand() {
+		return upperBand;
+	}
+
+	public void setUpperBand(double upperBand) {
+		this.upperBand = upperBand;
+	}
+
+	public double getLowerBand() {
+		return lowerBand;
+	}
+
+	public void setLowerBand(double lowerBand) {
+		this.lowerBand = lowerBand;
+	}
 
 	public String getKey() {
 		return key;

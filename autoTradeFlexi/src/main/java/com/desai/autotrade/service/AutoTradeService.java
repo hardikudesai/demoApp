@@ -72,9 +72,7 @@ public class AutoTradeService {
 	
 	@PostConstruct
 	private void init(){
-		
-		
-		
+			
 		sdf.setTimeZone(TimeZone.getTimeZone("Asia/Calcutta"));
 	}
 	
@@ -83,9 +81,9 @@ public class AutoTradeService {
 	public String doLogin(String user, String requestToken) throws JSONException, KiteException, IOException{
 		
 		if (mapOfConnections.get(user)!=null){
-			mapOfConnections.get(user).logout();
-			mapOfConnections.remove(user);
-			//return "Dear "+user+", You are already logged in for today. Please try again tommorow at 8:50 AM.";					
+			/*mapOfConnections.get(user).logout();
+			mapOfConnections.remove(user);*/
+			return "Dear "+user+", You are already logged in for today. Please try again tommorow at 8:50 AM.";					
 		}
 		
 		KiteConnect kiteConnect = new KiteConnect(userMapApiKey.get(user.toUpperCase()));
@@ -115,11 +113,11 @@ public class AutoTradeService {
 		return "Dear "+user+", Your Trading Request has been accepted by Auto Trading App at "+sdf.format(Calendar.getInstance(TimeZone.getTimeZone("Asia/Calcutta")).getTime())+"."+"Thank You";
 	}
 	
-	
-	@Scheduled(cron = "0 15 8 * * ?", zone = "Asia/Calcutta")
+	//Clear Connections
+	@Scheduled(cron = "0 0 8 * * ?", zone = "Asia/Calcutta")
 	private void clearListOfCollections(){
 		if (null!=mapOfConnections){
-			/*Collection<KiteConnect> coll = mapOfConnections.values();
+			Collection<KiteConnect> coll = mapOfConnections.values();
 			
 			for (KiteConnect k: coll){
 				if (k!=null){
@@ -127,18 +125,18 @@ public class AutoTradeService {
 						k.logout();
 					} catch (IOException e) {
 						// TODO Auto-generated catch block
-						e.printStackTrace();
+						log.info("IOException :"+e.getMessage());
 					} catch (KiteException e) {
 						// TODO Auto-generated catch block
-						e.printStackTrace();
+						log.info("KiteException :"+e.getMessage());
 					}
 				}
-			}*/
+			}
 			
 			mapOfConnections.clear();
 			log.info("Size of Connections Map: "+mapOfConnections.size());
 			try{
-				emailService.sendEmail("hardik.u.desai@gmail.com", "<h3>Clearing Cache for Desai Auto Trade Application", "Cache has been clear at: "+sdf.format(Calendar.getInstance(TimeZone.getTimeZone("Asia/Calcutta")).getTime())+"</h3>");
+				emailService.sendEmail("hardik.u.desai@gmail.com", "Clearing Cache for Desai Auto Trade Application", "Cache has been cleared at: "+sdf.format(Calendar.getInstance(TimeZone.getTimeZone("Asia/Calcutta")).getTime())+"</h3>");
 			} catch(Exception e1){
 				log.info("Exception while sending email : "+e1.getMessage());
 			}
@@ -161,6 +159,7 @@ public class AutoTradeService {
 		log.info("Instrument Size: "+instruments.length);		
 	}
 	
+	// Get Previous Day High And Low.
 	@Scheduled(cron = "0 55 8 * * ?" , zone = "Asia/Calcutta")
 	private void getPreviousDayHighAndLow(){
 		if (mapOfConnections.isEmpty())
@@ -194,6 +193,7 @@ public class AutoTradeService {
 		
 	}
 	
+	// Calculate Today's Decession.
 	@Scheduled(cron = "0 9 9 * * ?", zone = "Asia/Calcutta")
 	private void calculateTodaysDecession(){
 		if (mapOfConnections.isEmpty())
@@ -223,9 +223,11 @@ public class AutoTradeService {
 				
 				double upperBand = yesterdayHigh -  diffOfYestHighAndLow;
 				upperBand = Math.round(upperBand*100.0)/100.0;
+				mapOfHLQuote.get(e.getKey()).setUpperBand(upperBand);
 				
 				double lowerBand = yesterdayLow + diffOfYestHighAndLow;
 				lowerBand = Math.round(lowerBand*100.0)/100.0;
+				mapOfHLQuote.get(e.getKey()).setLowerBand(lowerBand);
 				
 				if (ohlc.lastPrice > upperBand){
 					/*log.info("Decession for :"+e.getKey()+" is Sell");
@@ -249,9 +251,9 @@ public class AutoTradeService {
 			for (Entry<String,OHLCQuote> e: entrySetForSellInstruments){
 				OHLCQuote ohlc = e.getValue();
 				
-				double yesterdayHigh = mapOfHLQuote.get(e.getKey()).getYesterdayHigh();
+				double upperBand = mapOfHLQuote.get(e.getKey()).getUpperBand();
 				
-				double diff = Math.abs(((ohlc.lastPrice - yesterdayHigh)*100)/ohlc.lastPrice);
+				double diff = Math.abs(((ohlc.lastPrice - upperBand)*100)/ohlc.lastPrice);
 				diff = Math.round(diff*100.0)/100.0;
 				if (diff > maxOfSell){
 					maxOfSell = diff;
@@ -262,9 +264,9 @@ public class AutoTradeService {
 			for (Entry<String,OHLCQuote> e: entrySetForBuyInstruments){
 				OHLCQuote ohlc = e.getValue();
 				
-				double yesterdayLow = mapOfHLQuote.get(e.getKey()).getYesterdayLow();
+				double lowerBand = mapOfHLQuote.get(e.getKey()).getLowerBand();
 				
-				double diff = Math.abs(((yesterdayLow - ohlc.lastPrice)*100)/ohlc.lastPrice);
+				double diff = Math.abs(((lowerBand - ohlc.lastPrice)*100)/ohlc.lastPrice);
 				diff = Math.round(diff*100.0)/100.0;
 				if (diff > maxOfBuy){
 					maxOfBuy = diff;
@@ -286,6 +288,10 @@ public class AutoTradeService {
 			log.info("Today's Decession: "+todayDecession);
 			log.info("Today's Instrument: "+todayInstrument);
 			log.info("Today's Instrument Last Price before Open: "+todaysInstrumentOpen);
+			log.info("Max Sell  Lower Band: "+mapOfHLQuote.get(maxSellInstrument.getKey()).getLowerBand());
+			log.info("Max Sell  Upper Band: "+mapOfHLQuote.get(maxSellInstrument.getKey()).getUpperBand());
+			log.info("Max Buy  Lower Band: "+mapOfHLQuote.get(maxBuyInstrument.getKey()).getLowerBand());
+			log.info("Max Buy  Upper Band: "+mapOfHLQuote.get(maxBuyInstrument.getKey()).getUpperBand());
 			
 			sendEmailsOfDecession();
 			//log.info("Received OHLC Quotes: "+mapOfOHLCQuote.size());
@@ -300,6 +306,7 @@ public class AutoTradeService {
 		}
 	}
 	
+	// Place Today's Order
 	@Scheduled(cron = "2 15 9 * * ?", zone = "Asia/Calcutta")
 	private void postOrder(){
 		if (mapOfConnections.isEmpty())
@@ -307,11 +314,21 @@ public class AutoTradeService {
 		
 		String [] instruments = {todayInstrument};
 		double lastTradedPrice = 0.0;
-		try {
+		
 			
 			KiteConnect kiteConnect = mapOfConnections.get(mapOfConnections.keySet().iterator().next());
-			
-			lastTradedPrice = kiteConnect.getLTP(instruments).get(todayInstrument).lastPrice;
+			try{
+				lastTradedPrice = kiteConnect.getLTP(instruments).get(todayInstrument).lastPrice;
+			} catch (JSONException e1) {
+				log.info("JSONException: "+e1);
+				return;
+			} catch (IOException e) {
+				log.info("IO Exception: "+e);
+				return;
+			} catch (KiteException e) {
+				log.info("Kite Exception: "+e);
+				return;
+			}	
 			
 			double stopLoss = calculateStopLoss(lastTradedPrice);
 			
@@ -319,7 +336,7 @@ public class AutoTradeService {
 			
 			Collection<KiteConnect> collectionOfKiteConnect = mapOfConnections.values();
 			for (KiteConnect kc : collectionOfKiteConnect){
-			
+			 
 				int cash = getMargin(kc);
 				
 				int quantity = (int)Math.round((cash * 5)/todaysInstrumentOpen);				
@@ -337,30 +354,73 @@ public class AutoTradeService {
 		        
 		        orderParams.product = Constants.PRODUCT_MIS;
 		        
-		        log.info("Today's Trading Details for User:"+kc.getProfile().userShortname);
-		        log.info("*************************************************************");
-		        log.info("Order Quantity: "+orderParams.quantity+" Type: "+orderParams.orderType+" Price: "+orderParams.price
-		        		+" TransactionType: "+orderParams.transactionType+" Trading Symbol: "+orderParams.tradingsymbol+" Stop Loss:"+orderParams.stoploss
-		        		+" Validity: "+orderParams.validity+" Square Off: "+orderParams.squareoff+" Product: "+orderParams.product);
+		        try{
 		        
-		        Order order = kiteConnect.placeOrder(orderParams, Constants.VARIETY_BO);
+			        log.info("Today's Trading Details for User:"+kc.getProfile().userShortname);
+			        log.info("*************************************************************");
+			        log.info("Order Quantity: "+orderParams.quantity+" Type: "+orderParams.orderType+" Price: "+orderParams.price
+			        		+" TransactionType: "+orderParams.transactionType+" Trading Symbol: "+orderParams.tradingsymbol+" Stop Loss:"+orderParams.stoploss
+			        		+" Validity: "+orderParams.validity+" Square Off: "+orderParams.squareoff+" Product: "+orderParams.product);
+			        
+			        Order order = kc.placeOrder(orderParams, Constants.VARIETY_BO);
+			        
+			        log.info("Order Id:"+order.orderId);
+			        
+			        log.info("*************************************************************");
+			        //mapOfUserToOrderId.put(kc.getProfile().userShortname,order10.orderId);		        
+			        
+			        mapOfOrderToConnections.put(order, kc);
+		        } catch (JSONException e1) {
+					log.info("Unable to place Order due to JSONException: "+e1.getMessage());					
+				} catch (IOException e) {
+					log.info("Unable to place Order due to JSONException: "+e.getMessage());					
+				} catch (KiteException e) {
+					log.info("Unable to place Order due to JSONException: "+e.message);					
+				}   
 		        
-		        log.info("Order Id:"+order.orderId);
-		        
-		        log.info("*************************************************************");
-		        //mapOfUserToOrderId.put(kc.getProfile().userShortname,order10.orderId);		        
-		        
-		        mapOfOrderToConnections.put(order, kc);
-		        sendEmailsOfTrade(order, kc);
 		    }	
 			
-		} catch (JSONException e1) {
-			log.info("JSONException: "+e1);
-		} catch (IOException e) {
-			log.info("IO Exception: "+e);
-		} catch (KiteException e) {
-			log.info("Kite Exception: "+e);
-		}
+		
+	}
+	
+	@Scheduled(cron = "0 17 9 * * ?", zone = "Asia/Calcutta")
+	private void sendEmailsOfTrade() throws JSONException, IOException, KiteException{
+		
+		if (mapOfOrderToConnections.isEmpty()){
+			return;
+		}	
+		
+		Set<Entry<Order,KiteConnect>> entrySet = mapOfOrderToConnections.entrySet();
+		
+		for (Entry<Order,KiteConnect> en: entrySet){
+		
+			Order order = en.getKey();
+			KiteConnect kc = en.getValue();
+			List<Trade> trades = kc.getOrderTrades(order.orderId);
+			
+			String subject = "Today's Trading Details";
+			String body = "";
+			for (Trade t: trades){
+				body = body.concat("Trading Timestamp: "+sdf.format(t.exchangeTimestamp));
+				body = body.concat("<br/>");
+				body = body.concat(" Symbol: "+t.tradingSymbol);
+				body = body.concat("<br/>");
+				body = body.concat(" Quantity: "+t.quantity);
+				body = body.concat("<br/>");
+				body = body.concat(" Transaction Type: "+t.transactionType);
+				body = body.concat("<br/>");
+				body = body.concat(" Trade Id: "+t.tradeId);
+				body = body.concat("<br/> Thank You.<br/>Hardik Desai.");
+			}
+			
+			if (!body.equals("")){
+				log.info("Sending Trading Information Email to "+kc.getProfile().email);
+				emailService.sendEmail(kc.getProfile().email, subject, body);
+			}
+			else{
+				log.info("No Trade information to be sent");
+			}
+		}	
 	}
 	
 	@Scheduled(cron = "0 15 15 * * ?", zone = "Asia/Calcutta")
@@ -370,21 +430,20 @@ public class AutoTradeService {
 			return;
 		
 		Set<Entry<Order,KiteConnect>> entrySet = mapOfOrderToConnections.entrySet();
-		String subject = "[Info]Square Off Completed for Auto Trading";
+		String subject = "Square Off Completed for Today's Trading";
 		
 		for (Entry<Order,KiteConnect> e: entrySet){
 			Order order = e.getKey();
 			KiteConnect kc = e.getValue();
 			
 			try {
-				Order o1 = kc.cancelOrder(order.orderId, Constants.VARIETY_BO);
+				kc.cancelOrder(order.orderId, Constants.VARIETY_BO);
 				
 				//Send Email
-				if (o1!=null){
-					String body = "<h3>Dear "+kc.getProfile().userName+",</h3><br/> Today's order has been square off. The order id for the square off is "+o1.orderId+". <br/> Thank You.";
-					emailService.sendEmail(kc.getProfile().email, subject, body);
-				}	
 				
+				String body = "<h3>Dear "+kc.getProfile().userName+",</h3><br/> Today's order has been square off. The order id is "+order.orderId+". <br/> Thank You.<br/>Hardik Desai.";
+				emailService.sendEmail(kc.getProfile().email, subject, body);
+								
 			} catch (JSONException e1) {
 				log.info("JSONException: "+e1);
 			} catch (IOException e1) {
@@ -448,41 +507,19 @@ public class AutoTradeService {
 	
 	private void sendEmailsOfDecession() throws IOException, KiteException{
 		Collection<KiteConnect> collectionOfKiteConnect = mapOfConnections.values();
-		String subject = "[Info] Today's Decession for Auto Trading";
+		String subject = "Today's Decession for Auto Trading";
 		for (KiteConnect kc : collectionOfKiteConnect){
 			
 			String body = "<h3>Dear "+kc.getProfile().userName+", </h3><br/>"+							
 							"Today's Instrument: "+todayInstrument+"<br/>"+
 							"Today's Decession: "+todayDecession+"<br/>"+
-							"Today's Instrument Pre-Open LTP: "+todaysInstrumentOpen+"<br/><br/>"+
-							"Thank You.";
+							"Today's Instrument LTP in Pre-Open Market: "+todaysInstrumentOpen+"<br/><br/>"+
+							"Thank You.<br/> Hardik Desai.";
 						
 			log.info("Sending Email To :"+kc.getProfile().email);
 			emailService.sendEmail(kc.getProfile().email, subject, body);
 		}
 	}
 		
-	private void sendEmailsOfTrade(Order order, KiteConnect kc) throws JSONException, IOException, KiteException{
-		List<Trade> trades = kc.getOrderTrades(order.orderId);
-		
-		String subject = "[Info] Today's Trading Details";
-		String body = "";
-		for (Trade t: trades){
-			body = body.concat("Trading Timestamp: "+sdf.format(t.exchangeTimestamp));
-			body = body.concat("<br/>");
-			body = body.concat(", Symbol: "+t.tradingSymbol);
-			body = body.concat("<br/>");
-			body = body.concat(", Quantity: "+t.quantity);
-			body = body.concat("<br/>");
-			body = body.concat(", Transaction Type: "+t.transactionType);
-		}
-		
-		if (!body.equals("")){
-			log.info("Sending Trading Information Email to "+kc.getProfile().email);
-			emailService.sendEmail(kc.getProfile().email, subject, body);
-		}
-		else{
-			log.info("No Trade information to be sent");
-		}
-	}
+	
 }

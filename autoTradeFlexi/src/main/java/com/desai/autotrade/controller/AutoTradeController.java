@@ -49,6 +49,7 @@ public class AutoTradeController {
 	public String doLogin(@PathVariable String user, @RequestParam Map<String, String> queryParams) {	   	
 		try {
 			return eTradeService.doLogin(user, queryParams.get("request_token"));
+			
 		} catch (JSONException e) {
 			log.warning("JSON Exception: "+e.getMessage());
 			return "Something went wrong while logging in. Please try again later" + e.getMessage();
@@ -70,6 +71,6 @@ public class AutoTradeController {
 		//now.setTimeZone(TimeZone.getTimeZone("Asia/Calcutta"));
 		
 		
-		return "Hello! The connection to eTrade Application is successfull at "+sdf.format(now.getTime());
+		return "Hello! The connection to Desai Auto Trade Application is successfull at "+sdf.format(now.getTime())+". The current version is deployed on 03/03/2018";
 	}
 }
