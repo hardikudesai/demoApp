@@ -53,12 +53,10 @@ public class AutoTradeController {
 		} catch (JSONException e) {
 			log.warning("JSON Exception: "+e.getMessage());
 			return "Something went wrong while logging in. Please try again later" + e.getMessage();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
+		} catch (IOException e) {			
 			log.warning("IOException: "+e.getMessage());
 			return "Something went wrong while logging in. Please try again later" + e.getMessage();
-		} catch (KiteException e) {
-			// TODO Auto-generated catch block
+		} catch (KiteException e) {			
 			log.warning("KiteException: "+e.getMessage());
 			return "Something went wrong while logging in. Please try again later" + e.getMessage();
 		}		
