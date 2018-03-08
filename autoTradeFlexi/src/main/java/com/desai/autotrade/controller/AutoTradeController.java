@@ -71,6 +71,6 @@ public class AutoTradeController {
 		//now.setTimeZone(TimeZone.getTimeZone("Asia/Calcutta"));
 		
 		
-		return "Hello! The connection to Desai Auto Trade Application is successfull at "+sdf.format(now.getTime())+". The current version is deployed on 03/03/2018";
+		return "Hello! The connection to Desai Auto Trade Application is successfull at "+sdf.format(now.getTime())+". The current version is deployed on 08/03/2018";
 	}
 }

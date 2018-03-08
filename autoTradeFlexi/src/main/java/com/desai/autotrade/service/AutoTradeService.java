@@ -186,11 +186,9 @@ public class AutoTradeService {
 				
 				mapOfHLQuote.put(e.getKey(), ohPrize);
 			}
-		} catch (IOException e1) {
-			// TODO Auto-generated catch block
+		} catch (IOException e1) {			
 			e1.printStackTrace();
-		} catch (KiteException e1) {
-			// TODO Auto-generated catch block
+		} catch (KiteException e1) {			
 			e1.printStackTrace();
 		}
 		
