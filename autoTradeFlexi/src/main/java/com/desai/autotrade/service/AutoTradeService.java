@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 import javax.annotation.PostConstruct;
@@ -31,6 +32,7 @@ import com.zerodhatech.models.OHLCQuote;
 import com.zerodhatech.models.Order;
 import com.zerodhatech.models.OrderParams;
 import com.zerodhatech.models.Trade;
+import com.zerodhatech.models.TriggerRange;
 import com.zerodhatech.models.User;
 
 
@@ -61,7 +63,9 @@ public class AutoTradeService {
 	
 	Map<String, String> mapOfUserToOrderId = new HashMap<String,String>();
 	
-	private Map<Order,KiteConnect> mapOfOrderToConnections = new HashMap<Order,KiteConnect>();
+	private Map<String,KiteConnect> mapOfOrderToConnections = new ConcurrentHashMap<String,KiteConnect>();
+	
+	private Map<String, Integer> mapOfUserToLeverage = new HashMap<String, Integer>();
 	
 	private static final Logger log = Logger.getLogger(AutoTradeService.class.getName());
 	
@@ -72,7 +76,8 @@ public class AutoTradeService {
 	
 	@PostConstruct
 	private void init(){
-			
+		
+		
 		sdf.setTimeZone(TimeZone.getTimeZone("Asia/Calcutta"));
 	}
 	
@@ -201,11 +206,11 @@ public class AutoTradeService {
 		
 		KiteConnect kiteConnect = mapOfConnections.get(mapOfConnections.keySet().iterator().next());
 		Map<String, OHLCQuote> listOfSellInstruments = new HashMap<String,OHLCQuote>();
-		Map<String, OHLCQuote> listOfBuyInstruments = new HashMap<String, OHLCQuote>();
+		//Map<String, OHLCQuote> listOfBuyInstruments = new HashMap<String, OHLCQuote>();
 		double maxOfSell = 0.0;
-		double maxOfBuy = 0.0;	
+		//double maxOfBuy = 0.0;	
 		Entry<String,OHLCQuote> maxSellInstrument = null;
-		Entry<String,OHLCQuote> maxBuyInstrument = null;
+		//Entry<String,OHLCQuote> maxBuyInstrument = null;
 		
 		try {
 			mapOfOHLCQuote = kiteConnect.getOHLC(instruments);
@@ -234,19 +239,19 @@ public class AutoTradeService {
 					log.info("Last Price for :"+e.getKey()+" is :"+ohlc.lastPrice);*/
 					listOfSellInstruments.put(e.getKey(), ohlc);
 				}
-				else if (ohlc.lastPrice < lowerBand){
-					/*log.info("Decession for :"+e.getKey()+" is Buy");
-					log.info("Last Price for :"+e.getKey()+" is :"+ohlc.lastPrice);*/
+				/*else if (ohlc.lastPrice < lowerBand){
+					log.info("Decession for :"+e.getKey()+" is Buy");
+					log.info("Last Price for :"+e.getKey()+" is :"+ohlc.lastPrice);
 					listOfBuyInstruments.put(e.getKey(), ohlc);
 				}
 				else{
 					//log.info("Decession for :"+e.getKey()+" is Wait");
-				}
+				}*/
 				//log.info("Symbol: "+e.getKey() + " - Open: "+ohlc.ohlc.open + " - Close: "+ohlc.ohlc.close+" - High: "+ohlc.ohlc.high+" - Low: "+ohlc.ohlc.low+ " - Last Price: "+ohlc.lastPrice);			
 			}
 			
 			Set<Entry<String,OHLCQuote>> entrySetForSellInstruments = listOfSellInstruments.entrySet();
-			Set<Entry<String,OHLCQuote>> entrySetForBuyInstruments = listOfBuyInstruments.entrySet();
+			//Set<Entry<String,OHLCQuote>> entrySetForBuyInstruments = listOfBuyInstruments.entrySet();
 			
 			for (Entry<String,OHLCQuote> e: entrySetForSellInstruments){
 				OHLCQuote ohlc = e.getValue();
@@ -261,7 +266,7 @@ public class AutoTradeService {
 				}					
 			}				
 			
-			for (Entry<String,OHLCQuote> e: entrySetForBuyInstruments){
+			/*for (Entry<String,OHLCQuote> e: entrySetForBuyInstruments){
 				OHLCQuote ohlc = e.getValue();
 				
 				double lowerBand = mapOfHLQuote.get(e.getKey()).getLowerBand();
@@ -272,26 +277,25 @@ public class AutoTradeService {
 					maxOfBuy = diff;
 					maxBuyInstrument = e;
 				}
-			}
+			}*/
 			
 			
-			if (maxOfSell > maxOfBuy){
+			//if (maxOfSell > maxOfBuy){
 				todayDecession = Constants.TRANSACTION_TYPE_SELL;
 				todayInstrument = maxSellInstrument.getKey();
 				todaysInstrumentOpen = maxSellInstrument.getValue().lastPrice;
-			}
+			/*}
 			else if (maxOfBuy > maxOfSell){
 				todayDecession = Constants.TRANSACTION_TYPE_BUY;
 				todayInstrument = maxBuyInstrument.getKey();
 				todaysInstrumentOpen = maxBuyInstrument.getValue().lastPrice;
-			}
+			}*/
 			log.info("Today's Decession: "+todayDecession);
 			log.info("Today's Instrument: "+todayInstrument);
 			log.info("Today's Instrument Last Price before Open: "+todaysInstrumentOpen);
 			log.info("Max Sell  Lower Band: "+mapOfHLQuote.get(maxSellInstrument.getKey()).getLowerBand());
 			log.info("Max Sell  Upper Band: "+mapOfHLQuote.get(maxSellInstrument.getKey()).getUpperBand());
-			log.info("Max Buy  Lower Band: "+mapOfHLQuote.get(maxBuyInstrument.getKey()).getLowerBand());
-			log.info("Max Buy  Upper Band: "+mapOfHLQuote.get(maxBuyInstrument.getKey()).getUpperBand());
+			
 			
 			sendEmailsOfDecession();
 			//log.info("Received OHLC Quotes: "+mapOfOHLCQuote.size());
@@ -314,73 +318,105 @@ public class AutoTradeService {
 		
 		String [] instruments = {todayInstrument};
 		double lastTradedPrice = 0.0;
+		double stopLoss = 0.0;
 		
+		double target = 0.0;
 			
-			KiteConnect kiteConnect = mapOfConnections.get(mapOfConnections.keySet().iterator().next());
-			try{
-				lastTradedPrice = kiteConnect.getLTP(instruments).get(todayInstrument).lastPrice;
-			} catch (JSONException e1) {
-				log.info("JSONException: "+e1);
+		KiteConnect kiteConnect = mapOfConnections.get(mapOfConnections.keySet().iterator().next());
+		
+		try{
+			lastTradedPrice = kiteConnect.getLTP(instruments).get(todayInstrument).lastPrice;
+			
+			stopLoss = calculateStopLoss(lastTradedPrice);
+			
+			target = calculateTarget(lastTradedPrice);
+			
+			log.info("Last Traded Price before rounding off:"+lastTradedPrice);
+			/*if (todayDecession.equals(Constants.TRANSACTION_TYPE_BUY)){
+				lastTradedPrice = Math.round((lastTradedPrice*1.02)*2)/2.0;
+			}else if (todayDecession.equals(Constants.TRANSACTION_TYPE_SELL)){*/
+			lastTradedPrice = ((lastTradedPrice*0.98)*2)/2.0;
+			lastTradedPrice = Math.round(lastTradedPrice*100.0)/100.0;
+			//}
+			
+			log.info("Last Traded Price after rounding off:"+lastTradedPrice);
+		} catch (JSONException e1) {
+			log.info("JSONException while getting Trigger Range: "+e1);
+			return;
+		} catch (IOException e) {
+			log.info("IO Exception while getting Trigger Range: "+e);
+			return;
+		} catch (KiteException e) {
+			log.info("Kite Exception while getting Trigger Range: "+e);
+			return;
+		}	
+		
+		
+		
+		Collection<KiteConnect> collectionOfKiteConnect = mapOfConnections.values();
+		for (KiteConnect kc : collectionOfKiteConnect){
+		 
+			int cash = getMargin(kc);
+			
+			int userLeverage = 0;
+			
+			
+			try {
+				userLeverage = mapOfUserToLeverage.get(kc.getProfile().userShortname);
+				log.info("Leverage for user "+kc.getProfile().userShortname+" is "+userLeverage);
+			} catch (IOException e2) {
+				log.info("Unable to get User Leverage due to IOException: "+e2.getMessage());
+				emailService.sendEmail("hardik.u.desai@gmail.com", "Unable to calculate leverage.", "Unable to calculate leverage due to IOException for user");
 				return;
+			} catch (KiteException e2) {
+				log.info("Unable to get User Leverage due to KiteException: "+e2.getMessage());
+				emailService.sendEmail("hardik.u.desai@gmail.com", "Unable to calculate leverage.", "Unable to calculate leverage due to KiteException for user");
+				return;
+			}
+			
+			
+			int quantity = (int)Math.round((cash * userLeverage)/todaysInstrumentOpen);				
+			
+			OrderParams orderParams = new OrderParams();
+			orderParams.quantity = (quantity-1);
+			orderParams.orderType = Constants.ORDER_TYPE_LIMIT;
+			orderParams.price = lastTradedPrice;
+			orderParams.transactionType = todayDecession;
+			orderParams.tradingsymbol = todayInstrument.split(":")[1];
+			orderParams.stoploss = stopLoss;
+			
+			orderParams.exchange = Constants.EXCHANGE_NSE;
+	        orderParams.validity = Constants.VALIDITY_DAY;
+	        //orderParams.triggerPrice = triggerRange.percent; 
+	        orderParams.squareoff = target;
+	        
+	        orderParams.product = Constants.PRODUCT_MIS;
+	        
+	        try{
+	        
+		        log.info("Today's Trading Details for User:"+kc.getProfile().userShortname);
+		        log.info("*************************************************************");
+		        log.info("Order Quantity: "+orderParams.quantity+" Type: "+orderParams.orderType+" Price: "+orderParams.price
+		        		+" TransactionType: "+orderParams.transactionType+" Trading Symbol: "+orderParams.tradingsymbol+" Stop Loss:"+orderParams.stoploss
+		        		+" Validity: "+orderParams.validity+" Square Off: "+orderParams.squareoff+" Product: "+orderParams.product);
+		        
+		        Order order = kc.placeOrder(orderParams, Constants.VARIETY_BO);
+		        
+		        log.info("Order Id:"+order.orderId);
+		        
+		        log.info("*************************************************************");
+		        //mapOfUserToOrderId.put(kc.getProfile().userShortname,order10.orderId);		        
+		        
+		        mapOfOrderToConnections.put(order.orderId, kc);
+	        } catch (JSONException e1) {
+				log.info("Unable to place Order due to JSONException: "+e1.getMessage());					
 			} catch (IOException e) {
-				log.info("IO Exception: "+e);
-				return;
+				log.info("Unable to place Order due to JSONException: "+e.getMessage());					
 			} catch (KiteException e) {
-				log.info("Kite Exception: "+e);
-				return;
-			}	
-			
-			double stopLoss = calculateStopLoss(lastTradedPrice);
-			
-			double target = calculateTarget(lastTradedPrice);
-			
-			Collection<KiteConnect> collectionOfKiteConnect = mapOfConnections.values();
-			for (KiteConnect kc : collectionOfKiteConnect){
-			 
-				int cash = getMargin(kc);
-				
-				int quantity = (int)Math.round((cash * 5)/todaysInstrumentOpen);				
-				
-				OrderParams orderParams = new OrderParams();
-				orderParams.quantity = (quantity-1);
-				orderParams.orderType = Constants.ORDER_TYPE_LIMIT;
-				orderParams.price = lastTradedPrice;
-				orderParams.transactionType = todayDecession;
-				orderParams.tradingsymbol = todayInstrument.split(":")[1];
-				orderParams.stoploss = stopLoss;
-				orderParams.exchange = Constants.EXCHANGE_NSE;
-		        orderParams.validity = Constants.VALIDITY_DAY;
-		        orderParams.squareoff = target;
-		        
-		        orderParams.product = Constants.PRODUCT_MIS;
-		        
-		        try{
-		        
-			        log.info("Today's Trading Details for User:"+kc.getProfile().userShortname);
-			        log.info("*************************************************************");
-			        log.info("Order Quantity: "+orderParams.quantity+" Type: "+orderParams.orderType+" Price: "+orderParams.price
-			        		+" TransactionType: "+orderParams.transactionType+" Trading Symbol: "+orderParams.tradingsymbol+" Stop Loss:"+orderParams.stoploss
-			        		+" Validity: "+orderParams.validity+" Square Off: "+orderParams.squareoff+" Product: "+orderParams.product);
-			        
-			        Order order = kc.placeOrder(orderParams, Constants.VARIETY_BO);
-			        
-			        log.info("Order Id:"+order.orderId);
-			        
-			        log.info("*************************************************************");
-			        //mapOfUserToOrderId.put(kc.getProfile().userShortname,order10.orderId);		        
-			        
-			        mapOfOrderToConnections.put(order, kc);
-		        } catch (JSONException e1) {
-					log.info("Unable to place Order due to JSONException: "+e1.getMessage());					
-				} catch (IOException e) {
-					log.info("Unable to place Order due to JSONException: "+e.getMessage());					
-				} catch (KiteException e) {
-					log.info("Unable to place Order due to JSONException: "+e.message);					
-				}   
-		        
-		    }	
-			
-		
+				log.info("Unable to place Order due to JSONException: "+e.message);					
+			}   
+	        
+	    }		
 	}
 	
 	@Scheduled(cron = "0 17 9 * * ?", zone = "Asia/Calcutta")
@@ -390,13 +426,13 @@ public class AutoTradeService {
 			return;
 		}	
 		
-		Set<Entry<Order,KiteConnect>> entrySet = mapOfOrderToConnections.entrySet();
+		Set<Entry<String,KiteConnect>> entrySet = mapOfOrderToConnections.entrySet();
 		
-		for (Entry<Order,KiteConnect> en: entrySet){
+		for (Entry<String,KiteConnect> en: entrySet){
 		
-			Order order = en.getKey();
+			String order = en.getKey();
 			KiteConnect kc = en.getValue();
-			List<Trade> trades = kc.getOrderTrades(order.orderId);
+			List<Trade> trades = kc.getOrderTrades(order);
 			
 			String subject = "Today's Trading Details";
 			String body = "";
@@ -429,20 +465,22 @@ public class AutoTradeService {
 		if (mapOfOrderToConnections == null || mapOfOrderToConnections.isEmpty())
 			return;
 		
-		Set<Entry<Order,KiteConnect>> entrySet = mapOfOrderToConnections.entrySet();
+		log.info("Starting Auto Square Off");
+		Set<Entry<String,KiteConnect>> entrySet = mapOfOrderToConnections.entrySet();
 		String subject = "Square Off Completed for Today's Trading";
 		
-		for (Entry<Order,KiteConnect> e: entrySet){
-			Order order = e.getKey();
+		for (Entry<String,KiteConnect> e: entrySet){
+			String order = e.getKey();
 			KiteConnect kc = e.getValue();
 			
 			try {
-				kc.cancelOrder(order.orderId, Constants.VARIETY_BO);
+				log.info("Proceeding with Auto Square off for user "+kc.getProfile().userName);
+				kc.cancelOrder(order, Constants.VARIETY_BO);
 				
 				//Send Email
 				
-				String body = "<h3>Dear "+kc.getProfile().userName+",</h3><br/> Today's order has been square off. The order id is "+order.orderId+". <br/> Thank You.<br/>Hardik Desai.";
-				emailService.sendEmail(kc.getProfile().email, subject, body);
+				//String body = "<h3>Dear "+kc.getProfile().userName+",</h3><br/> Today's order has been square off. The order id is "+order+". <br/> Thank You.<br/>Hardik Desai.";
+				//emailService.sendEmail(kc.getProfile().email, subject, body);
 								
 			} catch (JSONException e1) {
 				log.info("JSONException: "+e1);
@@ -458,28 +496,29 @@ public class AutoTradeService {
 		}
 	}
 	
-	public double calculateStopLoss(double lastTradedPrice){
-		double stopLoss = 0.0;
 		
-		if (todayDecession.equals(Constants.TRANSACTION_TYPE_SELL)){
-			stopLoss = Math.abs((lastTradedPrice * 1.02)-lastTradedPrice);
-		}
+	public double calculateStopLoss(double lastTradedPrice){
+		//double stopLoss = 0.0;
+		
+		//if (todayDecession.equals(Constants.TRANSACTION_TYPE_SELL)){
+		double	stopLoss = Math.abs((lastTradedPrice * 1.02)-lastTradedPrice);
+		/*}
 		else if (todayDecession.equals(Constants.TRANSACTION_TYPE_BUY)){
 			stopLoss = Math.abs((lastTradedPrice * 0.98)-lastTradedPrice);
-		}
+		}*/
 		
 		return Math.round(stopLoss * 2) / 2.0;
 	}
 	
 	public double calculateTarget(double lastTradedPrice){
-		double target = 0.0;
+		//double target = 0.0;
 		
-		if (todayDecession.equals(Constants.TRANSACTION_TYPE_SELL)){
-			target = Math.abs((lastTradedPrice * 0.90)-lastTradedPrice);
-		}
+		//if (todayDecession.equals(Constants.TRANSACTION_TYPE_SELL)){
+			double	target = Math.abs((lastTradedPrice * 0.90)-lastTradedPrice);
+		/*}
 		else if (todayDecession.equals(Constants.TRANSACTION_TYPE_BUY)){
 			target = Math.abs((lastTradedPrice * 1.10)-lastTradedPrice);
-		}
+		}*/
 		
 		return Math.round(target * 2) / 2.0;			
 	}
